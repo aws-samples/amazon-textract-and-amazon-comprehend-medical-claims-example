@@ -1,0 +1,10 @@
+{
+    "fileLocations": [
+        {
+	    "URIs" : ["https://s3.amazonaws.com/yours3bucket/yourfile.csv"]
+        }
+    ],
+    "globalUploadSettings": {
+        "format": "CSV"
+    }
+}

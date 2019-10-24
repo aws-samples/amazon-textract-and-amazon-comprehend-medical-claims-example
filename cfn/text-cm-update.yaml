@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation template for creating blog resources.
+Parameters:
+  EmailSubscriber:
+    Type: String
+    Description: SNS Email subscriber
+
+Resources:
+  BLOGROLE:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Description: IAM Role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - lambda.amazonaws.com
+                - s3.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      RoleName: blogrole
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonSQSFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonSNSFullAccess'
+        - 'arn:aws:iam::aws:policy/AWSLambdaFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonTextractFullAccess'
+        - 'arn:aws:iam::aws:policy/ComprehendMedicalFullAccess'
+        - 'arn:aws:iam::aws:policy/CloudWatchFullAccess'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+
+  ALLEQUEUE:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: blog-queue
+      VisibilityTimeout: 240
+
+  VALIDATEQUEUE:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: valid-blog-queue
+      VisibilityTimeout: 240
+
+  INVALIDATEQUEUE:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: invalid-blog-queue
+
+  BLOGSNS:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      DisplayName: blogsns
+      Subscription:
+        - Endpoint: !Ref EmailSubscriber
+          Protocol: email
+      TopicName: blogtopic
+
+  VALIDATE:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        S3Bucket: "blogtextract"
+        S3Key: validate.zip
+      Description: validate lambda function
+      FunctionName: blog-validate
+      Handler: blog-validate.lambda_handler
+      Environment:
+        Variables:
+          invalidqueue: !Ref INVALIDATEQUEUE
+          resultbucket: !Ref RESULTBUCKET
+          invalidsns: !Ref BLOGSNS
+      Role: !GetAtt BLOGROLE.Arn
+      Timeout: 120
+      Runtime: python3.7
+
+  PARSE:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        S3Bucket: "blogtextract"
+        S3Key: parse-desc.zip
+      Description: parse lambda function
+      FunctionName: blog-parse
+      Handler: blog-parse.lambda_handler
+      Role: !GetAtt BLOGROLE.Arn
+      Timeout: 120
+      Runtime: python3.7
+
+  QUEUE:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        S3Bucket: "blogtextract"
+        S3Key: extract-queue.zip
+      Description: extract lambda function
+      FunctionName: blog-extract
+      Handler: blog-extract.lambda_handler
+      Environment:
+        Variables:
+          allqueue: !Ref ALLEQUEUE
+      Role: !GetAtt BLOGROLE.Arn
+      Timeout: 120
+      Runtime: python3.7
+
+
+  QUEUETRIGGER:
+    Type: 'AWS::Lambda::EventSourceMapping'
+    Properties:
+      BatchSize: 10
+      Enabled: true
+      EventSourceArn: !GetAtt ALLEQUEUE.Arn
+      FunctionName: !GetAtt VALIDATE.Arn
+      
+  RESULTBUCKET:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: result/
+            Function: !GetAtt PARSE.Arn
+          - Event: 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: input/
+                  - Name: suffix
+                    Value: png
+            Function: !GetAtt QUEUE.Arn
+ 
+
+  BucketPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref QUEUE
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !GetAtt RESULTBUCKET.Arn
+      
+
+  ResultBucketPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref PARSE
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !GetAtt RESULTBUCKET.Arn
+
+
+
+Outputs:
+  LambdaFunctionExtract:
+    Description: Lambda Function to extract key-value from form
+    Value: !Ref QUEUE
+    
+  LambdaFunctionValidate:
+    Description: Lambda Function to validate form
+    Value: !Ref VALIDATE
+    
+  LambdaFunctionComprehendMedical:
+    Description: Lambda Function to detect medical entities using comprehend medical
+    Value: !Ref PARSE
+    
+  S3Bucket:
+    Description: Bucket for input and Outputs
+    Value: !Ref RESULTBUCKET
