@@ -4,7 +4,6 @@ Parameters:
   EmailSubscriber:
     Type: String
     Description: SNS Email subscriber
-
 Resources:
   BLOGROLE:
     Type: 'AWS::IAM::Role'
@@ -21,7 +20,7 @@ Resources:
                 - s3.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-      RoleName: blogrole
+      RoleName: blogrole10
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
         - 'arn:aws:iam::aws:policy/AmazonSQSFullAccess'
@@ -31,38 +30,106 @@ Resources:
         - 'arn:aws:iam::aws:policy/ComprehendMedicalFullAccess'
         - 'arn:aws:iam::aws:policy/CloudWatchFullAccess'
         - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-
   ALLEQUEUE:
     Type: 'AWS::SQS::Queue'
     Properties:
-      QueueName: blog-queue
+      QueueName: blog-queue10
       VisibilityTimeout: 240
-
   VALIDATEQUEUE:
     Type: 'AWS::SQS::Queue'
     Properties:
-      QueueName: valid-blog-queue
+      QueueName: valid-blog-queue10
       VisibilityTimeout: 240
-
   INVALIDATEQUEUE:
     Type: 'AWS::SQS::Queue'
     Properties:
-      QueueName: invalid-blog-queue
-
+      QueueName: invalid-blog-queue10
   BLOGSNS:
     Type: 'AWS::SNS::Topic'
     Properties:
-      DisplayName: blogsns
+      DisplayName: blogsns10
       Subscription:
         - Endpoint: !Ref EmailSubscriber
           Protocol: email
-      TopicName: blogtopic
+      TopicName: blogtopic10
+  RESULTBUCKET:
+    Type: 'AWS::S3::Bucket'
 
+  RESULTBUCKET1:
+    Type: 'AWS::S3::Bucket'
+  CUSTOMLAMBDA:
+    Type: 'AWS::CloudFormation::CustomResource'
+    Properties:
+      ServiceToken: !GetAtt 
+        - CREATELAMBDA
+        - Arn
+      S3BucketName: !Ref RESULTBUCKET1
+      Urls:
+        - 'https://github.com/aws-samples/amazon-textract-and-amazon-comprehend-medical-claims-example/raw/master/artifacts/parse-desc.zip'
+        - 'https://github.com/aws-samples/amazon-textract-and-amazon-comprehend-medical-claims-example/raw/master/artifacts/extract-queue.zip'
+        - 'https://github.com/aws-samples/amazon-textract-and-amazon-comprehend-medical-claims-example/raw/master/artifacts/validate.zip'
+  CREATELAMBDA:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: |
+          import os
+          import boto3
+          import urllib.request
+          import json
+          import cfnresponse
+          from urllib.parse import urlparse
+
+          s3 = boto3.resource('s3')
+
+          def save_to_local(url):
+            urlPath = urlparse(url).path
+            fileName = os.path.basename(urlPath)
+            filePath = '/tmp/' + fileName
+            urllib.request.urlretrieve(url, filePath)
+            return filePath
+            
+          def upload_to_s3(filePath, bucket):
+            fileName = os.path.basename(filePath)
+            s3.Bucket(bucket).upload_file(filePath, fileName) 
+            
+
+          def copy_to_s3(url, bucket):
+            filePath = save_to_local(url)
+            upload_to_s3(filePath, bucket)
+
+          def lambda_handler(event, context):
+            properties = event['ResourceProperties']
+            urls = properties['Urls']
+            bucket = properties['S3BucketName']
+            try:
+              for url in urls:
+                print(url)
+                copy_to_s3(url, bucket)
+                
+            except Exception as e:
+              print(e)
+              responseData = {}
+              responseData['Data'] = "Failure"
+              cfnresponse.send(event, context, cfnresponse.FAILED,responseData, "CustomResourcePhysicalID")
+              return
+            responseData = {}
+            responseData['Data'] = "Success"
+            cfnresponse.send(event, context, cfnresponse.SUCCESS,responseData, "CustomResourcePhysicalID")
+      Description: upload lambda zips
+      FunctionName: blog-uploadzips10
+      Handler: index.lambda_handler
+      Role: !GetAtt 
+        - BLOGROLE
+        - Arn
+      Timeout: 180
+      Runtime: python3.7
+      
   VALIDATE:
     Type: 'AWS::Lambda::Function'
     Properties:
       Code:
-        S3Bucket: "blogtextract"
+        S3Bucket: !Ref RESULTBUCKET1
         S3Key: validate.zip
       Description: validate lambda function
       FunctionName: blog-validate
@@ -80,7 +147,7 @@ Resources:
     Type: 'AWS::Lambda::Function'
     Properties:
       Code:
-        S3Bucket: "blogtextract"
+        S3Bucket: !Ref RESULTBUCKET1
         S3Key: parse-desc.zip
       Description: parse lambda function
       FunctionName: blog-parse
@@ -93,7 +160,7 @@ Resources:
     Type: 'AWS::Lambda::Function'
     Properties:
       Code:
-        S3Bucket: "blogtextract"
+        S3Bucket: !Ref RESULTBUCKET1
         S3Key: extract-queue.zip
       Description: extract lambda function
       FunctionName: blog-extract
@@ -105,7 +172,6 @@ Resources:
       Timeout: 120
       Runtime: python3.7
 
-
   QUEUETRIGGER:
     Type: 'AWS::Lambda::EventSourceMapping'
     Properties:
@@ -113,9 +179,7 @@ Resources:
       Enabled: true
       EventSourceArn: !GetAtt ALLEQUEUE.Arn
       FunctionName: !GetAtt VALIDATE.Arn
-      
-  RESULTBUCKET:
-    Type: 'AWS::S3::Bucket'
+
 
   BucketPermission:
     Type: 'AWS::Lambda::Permission'
@@ -154,3 +218,4 @@ Outputs:
   S3Bucket:
     Description: Bucket for input and Outputs
     Value: !Ref RESULTBUCKET
+
