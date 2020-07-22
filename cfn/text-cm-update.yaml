@@ -21,6 +21,7 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       RoleName: blogrole10
+      # I am using Managed policy, this can be further restricted per API usage
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
         - 'arn:aws:iam::aws:policy/AmazonSQSFullAccess'
