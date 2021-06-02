@@ -26,7 +26,7 @@ Resources:
         - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
         - 'arn:aws:iam::aws:policy/AmazonSQSFullAccess'
         - 'arn:aws:iam::aws:policy/AmazonSNSFullAccess'
-        - 'arn:aws:iam::aws:policy/AWSLambdaFullAccess'
+        - 'arn:aws:iam::aws:policy/AWSLambda_FullAccess'
         - 'arn:aws:iam::aws:policy/AmazonTextractFullAccess'
         - 'arn:aws:iam::aws:policy/ComprehendMedicalFullAccess'
         - 'arn:aws:iam::aws:policy/CloudWatchFullAccess'
