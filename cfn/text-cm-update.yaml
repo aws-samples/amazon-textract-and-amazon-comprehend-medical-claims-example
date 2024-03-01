@@ -26,7 +26,7 @@ Resources:
         - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
         - 'arn:aws:iam::aws:policy/AmazonSQSFullAccess'
         - 'arn:aws:iam::aws:policy/AmazonSNSFullAccess'
-        - 'arn:aws:iam::aws:policy/AWSLambdaFullAccess'
+        - 'arn:aws:iam::aws:policy/AWSLambda_FullAccess'
         - 'arn:aws:iam::aws:policy/AmazonTextractFullAccess'
         - 'arn:aws:iam::aws:policy/ComprehendMedicalFullAccess'
         - 'arn:aws:iam::aws:policy/CloudWatchFullAccess'
@@ -142,7 +142,7 @@ Resources:
         - BLOGROLE
         - Arn
       Timeout: 180
-      Runtime: python3.7
+      Runtime: python3.9
       
   VALIDATE:
     Type: 'AWS::Lambda::Function'
@@ -160,7 +160,9 @@ Resources:
           invalidsns: !Ref BLOGSNS
       Role: !GetAtt BLOGROLE.Arn
       Timeout: 120
-      Runtime: python3.7
+      Runtime: python3.9
+    DependsOn:
+         - "CUSTOMLAMBDA"
 
   PARSE:
     Type: 'AWS::Lambda::Function'
@@ -173,7 +175,9 @@ Resources:
       Handler: blog-parse.lambda_handler
       Role: !GetAtt BLOGROLE.Arn
       Timeout: 120
-      Runtime: python3.7
+      Runtime: python3.9
+    DependsOn:
+         - "CUSTOMLAMBDA"
 
   QUEUE:
     Type: 'AWS::Lambda::Function'
@@ -189,7 +193,9 @@ Resources:
           allqueue: !Ref ALLEQUEUE
       Role: !GetAtt BLOGROLE.Arn
       Timeout: 120
-      Runtime: python3.7
+      Runtime: python3.9
+    DependsOn:
+         - "CUSTOMLAMBDA"
 
   QUEUETRIGGER:
     Type: 'AWS::Lambda::EventSourceMapping'

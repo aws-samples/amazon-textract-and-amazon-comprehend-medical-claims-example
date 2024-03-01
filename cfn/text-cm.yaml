@@ -26,7 +26,7 @@ Resources:
         - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
         - 'arn:aws:iam::aws:policy/AmazonSQSFullAccess'
         - 'arn:aws:iam::aws:policy/AmazonSNSFullAccess'
-        - 'arn:aws:iam::aws:policy/AWSLambdaFullAccess'
+        - 'arn:aws:iam::aws:policy/AWSLambda_FullAccess'
         - 'arn:aws:iam::aws:policy/AmazonTextractFullAccess'
         - 'arn:aws:iam::aws:policy/ComprehendMedicalFullAccess'
         - 'arn:aws:iam::aws:policy/CloudWatchFullAccess'
@@ -87,11 +87,14 @@ Resources:
             urlPath = urlparse(url).path
             fileName = os.path.basename(urlPath)
             filePath = '/tmp/' + fileName
+            print('File path in save_to_local before urlib -->',filePath)
             urllib.request.urlretrieve(url, filePath)
+            print('File path in save_to_local after urlib --> ',filePath)
             return filePath
             
           def upload_to_s3(filePath, bucket):
             fileName = os.path.basename(filePath)
+            print('File name in upload_to_s3 --> ',fileName)
             s3.Bucket(bucket).upload_file(filePath, fileName) 
             
 
@@ -103,6 +106,9 @@ Resources:
             properties = event['ResourceProperties']
             urls = properties['Urls']
             bucket = properties['S3BucketName']
+            print('S3 Bucket name --> ',bucket)
+
+            
             try:
               for url in urls:
                 print(url)
@@ -123,8 +129,8 @@ Resources:
       Role: !GetAtt 
         - BLOGROLE
         - Arn
-      Timeout: 180
-      Runtime: python3.7
+      Timeout: 120
+      Runtime: python3.9
       
   VALIDATE:
     Type: 'AWS::Lambda::Function'
@@ -142,7 +148,9 @@ Resources:
           invalidsns: !Ref BLOGSNS
       Role: !GetAtt BLOGROLE.Arn
       Timeout: 120
-      Runtime: python3.7
+      Runtime: python3.9
+    DependsOn:
+         - "CUSTOMLAMBDA"
 
   PARSE:
     Type: 'AWS::Lambda::Function'
@@ -155,7 +163,9 @@ Resources:
       Handler: blog-parse.lambda_handler
       Role: !GetAtt BLOGROLE.Arn
       Timeout: 120
-      Runtime: python3.7
+      Runtime: python3.9
+    DependsOn:
+         - "CUSTOMLAMBDA"
 
   QUEUE:
     Type: 'AWS::Lambda::Function'
@@ -171,7 +181,9 @@ Resources:
           allqueue: !Ref ALLEQUEUE
       Role: !GetAtt BLOGROLE.Arn
       Timeout: 120
-      Runtime: python3.7
+      Runtime: python3.9
+    DependsOn:
+         - "CUSTOMLAMBDA"
 
   QUEUETRIGGER:
     Type: 'AWS::Lambda::EventSourceMapping'
@@ -180,6 +192,7 @@ Resources:
       Enabled: true
       EventSourceArn: !GetAtt ALLEQUEUE.Arn
       FunctionName: !GetAtt VALIDATE.Arn
+      
 
 
   BucketPermission:
@@ -200,7 +213,6 @@ Resources:
       Principal: s3.amazonaws.com
       SourceAccount: !Ref 'AWS::AccountId'
       SourceArn: !GetAtt RESULTBUCKET.Arn
-
 
 
 Outputs:
